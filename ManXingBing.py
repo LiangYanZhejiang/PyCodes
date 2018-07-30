@@ -8,6 +8,7 @@ import urllib
 import urllib2
 import sys
 import socket
+import MySQLdb
 
 headers = [
     {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0'},
@@ -23,23 +24,33 @@ MXB_Url = "http://jbk.39.net/zq/manxingbing/zl/?p=%d"
 
 def getDiseases(URLs):
     for DiseaseUrl in URLs:
-        source_code = urllib2.urlopen(DiseaseUrl)
-        plain_text = unicode(source_code.read(), 'gb2312')
-        soup = BeautifulSoup(plain_text)
-
+        req = urllib2.Request(DiseaseUrl, "", random.choice(headers))
+        page_code = urllib2.urlopen(req)
+        page_text = page_code.read()
+        soup = BeautifulSoup(page_text)
+        disease = {}
+        item = soup.find(attrs={'class': 'intro'})
+        # name = item.dt.text.encode("latin1").decode("gbk")
+        disease['name'] = item.dt.text.encode("latin1").decode("gbk")
+        #name = item.dt.text.encode("latin1").decode("gbk")
+        details = soup.find(attrs={'class': 'info'})
+        for item in details.findAll('li'):
+            key = item.i.text.encode("latin1").decode("gbk")
+            content = item.text.encode("latin1").decode("gbk")
+            value = content[len(key):]
+            disease[key]=value
 
 for pageNum in range(1, 500):
     page_url = MXB_Url % pageNum
     req = urllib2.Request(page_url, "", random.choice(headers))
     page_code = urllib2.urlopen(req)
-    page_text = page_code.read()#.decode('gb2312').encode('utf-8')
+    page_text = page_code.read()
     soup = BeautifulSoup(page_text)
     deseases = []
-    for text in soup.findAll(attrs={'class': 'drug-info-name'}):
-        deseases.append(text.next.get('href'))
+    for item in soup.findAll(attrs={'class': 'drug-info-name'}):
+        deseases.append(item.next.get('href'))
+       #content = text.text.encode("latin1").decode("gbk")
 
     if len(deseases) == 0:
         break
-
     getDiseases(deseases)
-
