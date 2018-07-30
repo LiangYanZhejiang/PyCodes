@@ -11,14 +11,14 @@ def getvalues(key):
     length = len(key)
     global Dict
     if length <= 0 :
-        return True
+        return True,['']
     if length == 1 :
         if Dict.has_key(key):
             return True, Dict[key]
         else:
             return False
     result=[]
-    for i in range (1, length):
+    for i in range (1, length+1):
         str1 = key[:i]
         if Dict.has_key(str1):
             x,y = getvalues(key[i:])
@@ -35,7 +35,7 @@ def getvalues(key):
 global Dict
 Dict = input("Dic=======")
 #Dict={'1':['A','B','C'],'2':['D','E'],'12':['X'],'3':['P','Q']}
-#Key = '123'
+#Key = '312'
 Key = input("Key========")
 x, y = getvalues(Key)
 
