@@ -9,6 +9,10 @@ import urllib2
 import sys
 import socket
 import MySQLdb
+import chardet
+
+reload(sys)
+sys.setdefaultencoding("utf-8")
 
 headers = [
     {'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0'},
@@ -45,12 +49,20 @@ def getDiseases(URLs):
         disease = {}
         item = soup.find(attrs={'class': 'intro'})
         # name = item.dt.text.encode("latin1").decode("gbk")
-        disease['disease_name'] = item.dt.text.encode("latin1").decode("gbk")
+        try:
+            disease['disease_name'] = item.dt.text.encode("latin1").decode("gbk","ignore")
+        except:
+            disease['disease_name'] = item.dt.text
+
         #name = item.dt.text.encode("latin1").decode("gbk")
         details = soup.find(attrs={'class': 'info'})
         for item in details.findAll('li'):
-            key = item.i.text.encode("latin1").decode("gbk")
-            content = item.text.encode("latin1").decode("gbk")
+            try:
+                key = item.i.text.encode("latin1").decode("gbk","ignore")
+                content = item.text.encode("latin1").decode("gbk","ignore")
+            except:
+                key = item.i.text
+                content = item.text
             value = content[len(key):]
             if column_name.has_key(key):
                 disease[column_name[key]]=value
@@ -88,7 +100,7 @@ def insertData(disease):
 
 
 db = MySQLdb.connect("localhost", "root", "mysql", "manxingbing", charset='utf8')
-for pageNum in range(1, 500):
+for pageNum in range(1, 500):#end page 242
     page_url = MXB_Url % pageNum
     req = urllib2.Request(page_url, "", random.choice(headers))
     page_code = urllib2.urlopen(req)
