@@ -56,16 +56,17 @@ def getDiseases(URLs):
 
         #name = item.dt.text.encode("latin1").decode("gbk")
         details = soup.find(attrs={'class': 'info'})
-        for item in details.findAll('li'):
-            try:
-                key = item.i.text.encode("latin1").decode("gbk","ignore")
-                content = item.text.encode("latin1").decode("gbk","ignore")
-            except:
-                key = item.i.text
-                content = item.text
-            value = content[len(key):]
-            if column_name.has_key(key):
-                disease[column_name[key]]=value
+        if details <> None :
+            for item in details.findAll('li'):
+                try:
+                    key = item.i.text.encode("latin1").decode("gbk","ignore")
+                    content = item.text.encode("latin1").decode("gbk","ignore")
+                except:
+                    key = item.i.text
+                    content = item.text
+                value = content[len(key):]
+                if column_name.has_key(key):
+                    disease[column_name[key]]=value
 
         insertData(disease)
 
