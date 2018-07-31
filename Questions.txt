@@ -1,0 +1,4 @@
+1. 安装mysql的时候回出现config-win.h文件找不到的错误
+解决方法：https://pypi.org/project/MySQL-python/1.2.5/#files 下载驱动
+双击安装驱动
+回到cmd, pip install mysql 即可

@@ -20,6 +20,20 @@ headers = [
 ]
 
 MXB_Url = "http://jbk.39.net/zq/manxingbing/zl/?p=%d"
+column_name = {u'别名：':'disease_alias',
+               u'是否属于医保：':'medicare',
+               u'发病部位：':'pathogenic_site',
+               u'挂号的科室：':'departmant',
+               u'传染性：':'infectivity',
+               u'治疗方法：':'therapies',
+               u'治愈率：':'cure_rate',
+               u'治疗周期：':'treatment_cycle',
+               u'多发人群：':'susceptible',
+               u'治疗费用：':'cost',
+               u'典型症状：':'symptom',
+               u'临床检查：':'examination',
+               u'并发症：':'syndrome',
+               u'常用药品：':'drug',}
 
 
 def getDiseases(URLs):
@@ -31,15 +45,49 @@ def getDiseases(URLs):
         disease = {}
         item = soup.find(attrs={'class': 'intro'})
         # name = item.dt.text.encode("latin1").decode("gbk")
-        disease['name'] = item.dt.text.encode("latin1").decode("gbk")
+        disease['disease_name'] = item.dt.text.encode("latin1").decode("gbk")
         #name = item.dt.text.encode("latin1").decode("gbk")
         details = soup.find(attrs={'class': 'info'})
         for item in details.findAll('li'):
             key = item.i.text.encode("latin1").decode("gbk")
             content = item.text.encode("latin1").decode("gbk")
             value = content[len(key):]
-            disease[key]=value
+            if column_name.has_key(key):
+                disease[column_name[key]]=value
 
+        insertData(disease)
+
+def insertData(disease):
+    global db
+    # 使用cursor()方法获取操作游标
+    cursor = db.cursor()
+
+    # SQL 插入语句
+    sql = """INSERT INTO manxingbing_tbl( """
+    values = "VALUES("
+    first = True
+
+    for item in disease.iterkeys():
+        if not first:
+            sql = sql + ','
+            values = values + ','
+        sql = sql + item;
+        values = values+"'"+disease[item]+"'"
+        first =  False;
+
+    sql = sql + ')'+ values + ');'
+
+    try:
+        # 执行sql语句
+        cursor.execute(sql)
+        # 提交到数据库执行
+        db.commit()
+    except:
+        # Rollback in case there is any error
+        db.rollback()
+
+
+db = MySQLdb.connect("localhost", "root", "mysql", "manxingbing", charset='utf8')
 for pageNum in range(1, 500):
     page_url = MXB_Url % pageNum
     req = urllib2.Request(page_url, "", random.choice(headers))
@@ -54,3 +102,4 @@ for pageNum in range(1, 500):
     if len(deseases) == 0:
         break
     getDiseases(deseases)
+db.close()
