@@ -95,8 +95,9 @@ def insertData(disease):
         cursor.execute(sql)
         # 提交到数据库执行
         db.commit()
-    except:
+    except Exception, e:
         # Rollback in case there is any error
+        print e
         db.rollback()
 
 

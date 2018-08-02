@@ -1,7 +1,7 @@
-create table manxingbing_tbl if not exists(
+create table if not exists manxingbing_tbl(
    disease_id INT NOT NULL AUTO_INCREMENT,
    disease_name VARCHAR(40) NOT NULL,
-   disease_alias VARCHAR(100),
+   disease_alias VARCHAR(200),
    medicare VARCHAR(100),
    pathogenic_site VARCHAR(100),
    departmant VARCHAR(100),
