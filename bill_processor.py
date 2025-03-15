@@ -56,7 +56,11 @@ class VideoBillProcessor:
         """处理单帧图像"""
         # 图像预处理
         image = cv2.imread(frame_path)
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        #print('lytest')
+        #print(image.size)  # 显示图像像素点个数:1290240
+        #print(image.shape) #(960, 448, 3) 图像的高度、宽度以及颜色通道数
+        image = image[204:960-95-204, 21:448-21,]  # 截取中间区域
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)#用于图像颜色空间转换的函数。它允许你将图像从一个色彩空间转换为另一个色彩空间
         _, processed = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         
         # OCR识别
@@ -65,7 +69,7 @@ class VideoBillProcessor:
         # 结构化处理
         texts = [{'text': line[1][0], 'x': line[0][0][0], 'y': line[0][0][1]} 
                 for line in result[0]] if result else []
-        
+        #print(texts)
         return self._structure_data(texts, y_threshold)
 
     def _structure_data(self, texts, y_threshold):
@@ -76,10 +80,18 @@ class VideoBillProcessor:
         current_row = []
         
         for text in sorted_texts:
+            #print('lytest')
+            #print(text)
             if not current_row or abs(text['y'] - current_row[0]['y']) <= y_threshold:
                 current_row.append(text)
             else:
-                rows.append(sorted(current_row, key=lambda x: x['x']))
+                current_row = sorted(current_row, key=lambda x: x['x'])
+                if len(current_row) == 2:
+                    rows.append(current_row)
+                elif len(current_row) == 3:
+                    current_row.pop(0)
+                rows.append(current_row)
+
                 current_row = [text]
         if current_row:
             rows.append(sorted(current_row, key=lambda x: x['x']))
@@ -110,7 +122,7 @@ class VideoBillProcessor:
 if __name__ == "__main__":
     processor = VideoBillProcessor()
     processor.process_video(
-        video_path='2024.mp4',  # 替换为你的视频路径
+        video_path='2024bill.mp4',  # 替换为你的视频路径
         output_excel='bill_output.xlsx',
         interval=30,      # 每30帧提取一帧（约每秒1帧，假设视频30fps）
         y_threshold=20    # 行高阈值，根据实际情况调整
