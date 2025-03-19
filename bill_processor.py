@@ -59,6 +59,9 @@ class VideoBillProcessor:
         #print('lytest')
         #print(image.size)  # 显示图像像素点个数:1290240
         #print(image.shape) #(960, 448, 3) 图像的高度、宽度以及颜色通道数
+        #13.9cm=960,6.5cm=448
+        #上面固定2.9cm-（200），下面固定1.35cm-（93），左边去除0.3cm-（20）
+        #日期为左边1cm-（20-69），分类为1-3cm（69-207），金额为5-6.5cm（345-448）
         image = image[204:960-95-204, 21:448-21,]  # 截取中间区域
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)#用于图像颜色空间转换的函数。它允许你将图像从一个色彩空间转换为另一个色彩空间
         _, processed = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
@@ -78,18 +81,16 @@ class VideoBillProcessor:
         sorted_texts = sorted(texts, key=lambda x: x['y'])
         rows = []
         current_row = []
-        
+        empty_text = {'text': '', 'x': 50, 'y': 0}
         for text in sorted_texts:
-            #print('lytest')
-            #print(text)
             if not current_row or abs(text['y'] - current_row[0]['y']) <= y_threshold:
                 current_row.append(text)
             else:
                 current_row = sorted(current_row, key=lambda x: x['x'])
-                if len(current_row) == 2:
-                    rows.append(current_row)
-                elif len(current_row) == 3:
-                    current_row.pop(0)
+                if current_row[0]['x']>60:
+                    empty_text['y']=current_row[0]['y']
+                    current_row.insert(0,empty_text)
+
                 rows.append(current_row)
 
                 current_row = [text]
@@ -124,6 +125,6 @@ if __name__ == "__main__":
     processor.process_video(
         video_path='2024bill.mp4',  # 替换为你的视频路径
         output_excel='bill_output.xlsx',
-        interval=30,      # 每30帧提取一帧（约每秒1帧，假设视频30fps）
+        interval=100,      # 每30帧提取一帧（约每秒1帧，假设视频30fps）
         y_threshold=20    # 行高阈值，根据实际情况调整
     )
