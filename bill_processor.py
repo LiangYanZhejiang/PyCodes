@@ -2,6 +2,7 @@ import cv2
 import pandas as pd
 import os
 from paddleocr import PaddleOCR
+import numpy as np  # 添加这行
 
 # 分类结构配置
 CATEGORIES = {
@@ -90,8 +91,9 @@ class VideoBillProcessor:
         #上面固定2.9cm-（200），下面固定1.35cm-（93），左边去除0.3cm-（20）
         #日期为左边1cm-（20-69），分类为1-3cm（69-207），金额为5-6.5cm（345-448）
         image = image[204:960-95-204, 21:448-21,]  # 截取中间区域
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)#用于图像颜色空间转换的函数。它允许你将图像从一个色彩空间转换为另一个色彩空间
-        _, processed = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+        #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)#用于图像颜色空间转换的函数。它允许你将图像从一个色彩空间转换为另一个色彩空间
+        #_, processed = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+        processed = self._process_image(image)
         
         # OCR识别
         result = self.ocr.ocr(processed, cls=True)
@@ -101,6 +103,34 @@ class VideoBillProcessor:
                 for line in result[0]] if result else []
         #print(texts)
         return self._structure_data(texts, y_threshold)
+    
+    def _process_image(self, image):
+        # 提取红色通道
+        red_channel = image[:, :, 2]
+        
+        # CLAHE增强
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        enhanced = clahe.apply(red_channel)
+        
+        # 自适应阈值
+        binary = cv2.adaptiveThreshold(
+            enhanced, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV, 15, 5
+        )
+        
+        # 背景抑制（可选）
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lower_pink = np.array([150, 30, 150])
+        upper_pink = np.array([180, 80, 255])
+        mask = cv2.inRange(hsv, lower_pink, upper_pink)
+        binary = cv2.bitwise_and(binary, binary, mask=cv2.bitwise_not(mask))
+        
+        # 形态学处理
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,2))
+        processed = cv2.dilate(binary, kernel, iterations=1)
+        
+        return processed
 
     def _structure_data(self, texts, y_threshold):
         """结构化识别结果"""
@@ -115,7 +145,7 @@ class VideoBillProcessor:
             else:
                 rows.append(self._create_current_row(current_row))
                 current_row = [text]
-                
+
         if current_row:
             rows.append(self._create_current_row(current_row))
 
