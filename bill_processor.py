@@ -3,6 +3,33 @@ import pandas as pd
 import os
 from paddleocr import PaddleOCR
 
+# 分类结构配置
+CATEGORIES = {
+    '餐饮': ['买菜', '三餐', '水果', '饮品', '零食', '甜品', '粮油调'],
+    '购物': ['日用品', '衣鞋包', '护肤美妆', '宠物', '饰品', '数码', '电器', '软装'],
+    '居家': ['房租', '水电煤', '话费', '网费', '物业', '维修'],
+    '学习': ['书籍', '文具'],
+    '健身': ['课&卡', '装备'],
+    '人情': ['日用', '医药', '送礼', '发红包'],
+    '医疗': ['药品', '保险', '保健', '治疗'],
+    '娱乐': ['休闲', '请客', '约会', '聚会'],
+    '交通': ['公交地铁', '打车', '私家车', '飞机火车', '共享单车'],
+    '其他': ['年费', '旅游', '坏账', '丢失']
+}
+
+category_map = {
+            '买菜': '餐饮', '三餐': '餐饮', '水果': '餐饮', '饮品': '餐饮', '零食': '餐饮',
+            '甜品': '餐饮', '粮油调': '餐饮', '日用品': '购物', '衣鞋包': '购物', '护肤美妆': '购物',
+            '宠物': '购物', '饰品': '购物', '数码': '购物', '电器': '购物', '软装': '购物',
+            '房租': '居家', '水电煤': '居家', '话费': '居家', '网费': '居家', '物业': '居家',
+            '维修': '居家', '书籍': '学习', '文具': '学习', '课&卡': '健身', '装备': '健身',
+            '日用': '人情', '医药': '人情', '送礼': '人情', '发红包': '人情', '药品': '医疗',
+            '保险': '医疗', '保健': '医疗', '治疗': '医疗', '休闲': '娱乐', '请客': '娱乐',
+            '约会': '娱乐', '聚会': '娱乐', '公交地铁': '交通', '打车': '交通', '私家车': '交通',
+            '飞机火车': '交通', '共享单车': '交通', '年费': '其他', '旅游': '其他',
+            '坏账': '其他', '丢失': '其他'
+        }
+
 class VideoBillProcessor:
     def __init__(self):
         self.ocr = PaddleOCR(use_angle_cls=True, lang='ch')  # 中文账单请改为 'ch'
@@ -81,23 +108,34 @@ class VideoBillProcessor:
         sorted_texts = sorted(texts, key=lambda x: x['y'])
         rows = []
         current_row = []
-        empty_text = {'text': '', 'x': 50, 'y': 0}
+        
         for text in sorted_texts:
             if not current_row or abs(text['y'] - current_row[0]['y']) <= y_threshold:
                 current_row.append(text)
             else:
-                current_row = sorted(current_row, key=lambda x: x['x'])
-                if current_row[0]['x']>60:
-                    empty_text['y']=current_row[0]['y']
-                    current_row.insert(0,empty_text)
-
-                rows.append(current_row)
-
+                rows.append(self._create_current_row(current_row))
                 current_row = [text]
+                
         if current_row:
-            rows.append(sorted(current_row, key=lambda x: x['x']))
+            rows.append(self._create_current_row(current_row))
 
         return [[item['text'] for item in row] for row in rows]
+    
+    def _create_current_row(self, row):
+        row = sorted(row, key=lambda x: x['x'])
+        secondText = row[0]['text']
+        first_text = {'text': ' ', 'x': 20, 'y': 0}
+        first_text['y']=row[0]['y']
+        #if current_row[0]['x']>40:#如果第一项就是二级分类
+        for key in category_map.keys():
+            if secondText.find(key) != -1:
+                first_text['text'] = category_map[key]
+                row[0]['text'] = key
+                break
+
+        row.insert(0,first_text)
+        return row
+
 
     def _create_dataframe(self, data):
         """创建并清理数据"""
@@ -125,6 +163,6 @@ if __name__ == "__main__":
     processor.process_video(
         video_path='2024bill.mp4',  # 替换为你的视频路径
         output_excel='bill_output.xlsx',
-        interval=100,      # 每30帧提取一帧（约每秒1帧，假设视频30fps）
-        y_threshold=20    # 行高阈值，根据实际情况调整
+        interval=30,      # 每30帧提取一帧（约每秒1帧，假设视频30fps）
+        y_threshold=30    # 行高阈值，根据实际情况调整
     )
