@@ -2,7 +2,7 @@ import cv2
 import pandas as pd
 import os
 from paddleocr import PaddleOCR
-import numpy as np  # 添加这行
+import numpy as np
 
 # 分类结构配置
 CATEGORIES = {
@@ -30,6 +30,8 @@ category_map = {
             '飞机火车': '交通', '共享单车': '交通', '年费': '其他', '旅游': '其他',
             '坏账': '其他', '丢失': '其他'
         }
+date_text = {'text': '', 'x': 5, 'y': 0}
+first_cat = {'text': '', 'x': 10, 'y': 0}
 
 class VideoBillProcessor:
     def __init__(self):
@@ -90,18 +92,26 @@ class VideoBillProcessor:
         #13.9cm=960,6.5cm=448
         #上面固定2.9cm-（200），下面固定1.35cm-（93），左边去除0.3cm-（20）
         #日期为左边1cm-（20-69），分类为1-3cm（69-207），金额为5-6.5cm（345-448）
-        image = image[204:960-95-204, 21:448-21,]  # 截取中间区域
-        #gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)#用于图像颜色空间转换的函数。它允许你将图像从一个色彩空间转换为另一个色彩空间
-        #_, processed = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-        processed = self._process_image(image)
-        
+        #image = image[200:-93, 20:0,]  # 截取中间区域
+        #分左右区域，左边做增强，得到日期，右边同之前一样，用于过滤备注
+        image_left = image[200:-93, 20:69,]
+        processed = self._process_image(image_left)
         # OCR识别
         result = self.ocr.ocr(processed, cls=True)
-        
         # 结构化处理
         texts = [{'text': line[1][0], 'x': line[0][0][0], 'y': line[0][0][1]} 
-                for line in result[0]] if result else []
-        #print(texts)
+                for line in result[0]] if result and (result[0]!=None) else []
+        
+        image_right = image[200:-93, 69:,]
+        gray = cv2.cvtColor(image_right, cv2.COLOR_BGR2GRAY)#用于图像颜色空间转换的函数。它允许你将图像从一个色彩空间转换为另一个色彩空间
+        _, processed = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+        # OCR识别
+        result = self.ocr.ocr(processed, cls=True)
+        # 结构化处理
+        #‘x’偏移要+69，因为左边被裁剪掉了--怪不得之前那个数字判断不对，忘了左边有裁剪
+        texts.extend({'text': line[1][0], 'x': line[0][0][0]+69, 'y': line[0][0][1]} 
+                for line in result[0])
+        
         return self._structure_data(texts, y_threshold)
     
     def _process_image(self, image):
@@ -152,19 +162,35 @@ class VideoBillProcessor:
         return [[item['text'] for item in row] for row in rows]
     
     def _create_current_row(self, row):
-        row = sorted(row, key=lambda x: x['x'])
-        secondText = row[0]['text']
-        first_text = {'text': ' ', 'x': 20, 'y': 0}
-        first_text['y']=row[0]['y']
-        #if current_row[0]['x']>40:#如果第一项就是二级分类
+        current_row = sorted(row, key=lambda x: x['x'])
+        
+        first_cat['y']=current_row[0]['y']
+        if current_row[0]['x']>69:#如果第一项就是二级分类
+            #添加日期
+            date_text['y'] = current_row[0]['y']
+            current_row.insert(0,date_text)
+
+        elif current_row[0]['text'].find('月') == -1:
+            #这行有日期
+            #更新日期
+            date_text['text'] = current_row[0]['text']
+
+        #else:#月份行
+        #但也存在月行的月没有被识别出来
+        if len(current_row) ==1:
+            return current_row
+
+        #添加第一级分类
+        second_cat = current_row[1]['text']
         for key in category_map.keys():
-            if secondText.find(key) != -1:
-                first_text['text'] = category_map[key]
-                row[0]['text'] = key
+            if second_cat.find(key) != -1:
+                first_cat['text'] = category_map[key]
+                current_row[1]['text'] = key
+                current_row.insert(1,first_cat)
                 break
 
-        row.insert(0,first_text)
-        return row
+        
+        return current_row
 
 
     def _create_dataframe(self, data):
@@ -194,5 +220,5 @@ if __name__ == "__main__":
         video_path='2024bill.mp4',  # 替换为你的视频路径
         output_excel='bill_output.xlsx',
         interval=30,      # 每30帧提取一帧（约每秒1帧，假设视频30fps）
-        y_threshold=30    # 行高阈值，根据实际情况调整
+        y_threshold=20    # 行高阈值，根据实际情况调整
     )
