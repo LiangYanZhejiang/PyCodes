@@ -30,8 +30,6 @@ category_map = {
             '飞机火车': '交通', '共享单车': '交通', '年费': '其他', '旅游': '其他',
             '坏账': '其他', '丢失': '其他'
         }
-date_text = {'text': '', 'x': 5, 'y': 0}
-first_cat = {'text': '', 'x': 10, 'y': 0}
 
 class VideoBillProcessor:
     def __init__(self):
@@ -52,10 +50,10 @@ class VideoBillProcessor:
             frame_path = os.path.join(temp_folder, f"frame_{i}.jpg")
             processed_data = self._process_frame(frame_path, y_threshold)
             all_data.extend(processed_data)
-
+        
         # 去重并创建DataFrame
         df = self._create_dataframe(all_data)
-        
+
         # 保存结果
         df.to_excel(output_excel, index=False)
         print(f"成功生成Excel文件：{output_excel}")
@@ -91,10 +89,10 @@ class VideoBillProcessor:
         #print(image.shape) #(960, 448, 3) 图像的高度、宽度以及颜色通道数
         #13.9cm=960,6.5cm=448
         #上面固定2.9cm-（200），下面固定1.35cm-（93），左边去除0.3cm-（20）
-        #日期为左边1cm-（20-69），分类为1-3cm（69-207），金额为5-6.5cm（345-448）
+        #日期为左边0.4cm-0.8cm（27-55），分类为1.5-2.8cm（97-182），金额为5-6.5cm（345-448）
         #image = image[200:-93, 20:0,]  # 截取中间区域
         #分左右区域，左边做增强，得到日期，右边同之前一样，用于过滤备注
-        image_left = image[200:-93, 20:69,]
+        image_left = image[200:-93, 27:55,]
         processed = self._process_image(image_left)
         # OCR识别
         result = self.ocr.ocr(processed, cls=True)
@@ -102,17 +100,18 @@ class VideoBillProcessor:
         texts = [{'text': line[1][0], 'x': line[0][0][0], 'y': line[0][0][1]} 
                 for line in result[0]] if result and (result[0]!=None) else []
         
-        image_right = image[200:-93, 69:,]
+        image_right = image[200:-93, 97:,]
         gray = cv2.cvtColor(image_right, cv2.COLOR_BGR2GRAY)#用于图像颜色空间转换的函数。它允许你将图像从一个色彩空间转换为另一个色彩空间
         _, processed = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         # OCR识别
         result = self.ocr.ocr(processed, cls=True)
         # 结构化处理
-        #‘x’偏移要+69，因为左边被裁剪掉了--怪不得之前那个数字判断不对，忘了左边有裁剪
-        texts.extend({'text': line[1][0], 'x': line[0][0][0]+69, 'y': line[0][0][1]} 
+        #‘x’偏移要+97，因为左边被裁剪掉了--怪不得之前那个数字判断不对，忘了左边有裁剪
+        texts.extend({'text': line[1][0], 'x': line[0][0][0]+97, 'y': line[0][0][1]} 
                 for line in result[0])
         
         return self._structure_data(texts, y_threshold)
+
     
     def _process_image(self, image):
         # 提取红色通道
@@ -158,38 +157,41 @@ class VideoBillProcessor:
 
         if current_row:
             rows.append(self._create_current_row(current_row))
-
+        
+        #转化为行数据
         return [[item['text'] for item in row] for row in rows]
+
     
     def _create_current_row(self, row):
         current_row = sorted(row, key=lambda x: x['x'])
-        
-        first_cat['y']=current_row[0]['y']
-        if current_row[0]['x']>69:#如果第一项就是二级分类
-            #添加日期
+        date_text = {'text': '', 'x': 5, 'y': 0}
+        if current_row[0]['x']>97:#如果第一项就是二级分类
+            #添加日期列
             date_text['y'] = current_row[0]['y']
             current_row.insert(0,date_text)
 
-        elif current_row[0]['text'].find('月') == -1:
-            #这行有日期
-            #更新日期
-            date_text['text'] = current_row[0]['text']
-
-        #else:#月份行
-        #但也存在月行的月没有被识别出来
         if len(current_row) ==1:
             return current_row
 
         #添加第一级分类
+        first_cat = {'text': '', 'x': 10, 'y': 0}
+        first_cat['y']=current_row[1]['y']
         second_cat = current_row[1]['text']
+        temp_cat = current_row[len(current_row)-2]['text']
         for key in category_map.keys():
             if second_cat.find(key) != -1:
                 first_cat['text'] = category_map[key]
                 current_row[1]['text'] = key
-                current_row.insert(1,first_cat)
+                break
+            if len(current_row)>3 and temp_cat.find(key) != -1:
+                current_row.pop(1)
+                current_row[1]['text'] = key
+                first_cat['text'] = category_map[key]
                 break
 
-        
+
+        current_row.insert(1,first_cat)
+
         return current_row
 
 
@@ -199,9 +201,12 @@ class VideoBillProcessor:
         seen = set()
         unique_data = []
         for row in data:
-            key = tuple(row)
-            if key not in seen and len(row) > 0:
+            #去重选项更改一下
+            key = tuple(row[1:])
+            if key not in seen and len(row)-1 > 0:
                 seen.add(key)
+                unique_data.append(row)
+            elif len(row) <= 1:
                 unique_data.append(row)
         
         # 创建DataFrame
